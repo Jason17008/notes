@@ -1,0 +1,200 @@
+```
+　Nexus 安装成功后，接下来需要修改 Maven 的配置文件（settings.xml），整合 Nexus。
+
+　　找到 <servers> 标签，添加 Nexus 默认认证信息：
+
+<server>   
+    <id>my-nexus-releases</id>   
+    <username>admin</username>   
+    <password>admin123</password>   
+  </server>   
+  <server>   
+    <id>my-nexus-snapshot</id>   
+    <username>admin</username>   
+    <password>admin123</password>   
+  </server>
+　　找到 <mirrors> 标签，添加镜像：
+
+<mirror>
+  <!--This sends everything else to /public -->
+  <id>nexus</id>
+  <mirrorOf>*</mirrorOf>
+  <url>http://localhost:8081/nexus/content/groups/public/</url>
+</mirror>
+　　找到 <profiles> 标签，添加仓库信息：
+
+<profile>
+  <id>nexus</id>
+  <!--Enable snapshots for the built in central repo to direct -->
+  <!--all requests to nexus via the mirror -->
+  <repositories>
+    <repository>
+      <id>central</id>
+      <url>http://central</url>
+      <releases><enabled>true</enabled></releases>
+      <snapshots><enabled>true</enabled></snapshots>
+    </repository>
+  </repositories>
+ <pluginRepositories>
+    <pluginRepository>
+      <id>central</id>
+      <url>http://central</url>
+      <releases><enabled>true</enabled></releases>
+      <snapshots><enabled>true</enabled></snapshots>
+    </pluginRepository>
+  </pluginRepositories>
+</profile>
+　　激活仓库：
+
+<activeProfiles>
+  <!--make the profile active all the time -->
+  <activeProfile>nexus</activeProfile>
+</activeProfiles>
+　　配置完成后保存，并重启 nexus  服务。
+
+　　重启  nexus  服务 完成后，在命令行窗口进入一个使用 Maven 构建的项目，输入 mvn package clean 命令，清理完成后，登录 nexus 的 admin 账号可以看到 Public Repositories  下出现了一些 Jar 包。
+```
+
+```
+#!/usr/bin/python2.7
+#_*_coding:utf-8 _*_
+ 
+ 
+import requests,sys,json
+import urllib3
+urllib3.disable_warnings()
+ 
+reload(sys)
+sys.setdefaultencoding('utf-8')
+ 
+def GetToken(Corpid,Secret):
+    Url = "https://qyapi.weixin.qq.com/cgi-bin/gettoken"
+    Data = {
+        "corpid":Corpid,
+        "corpsecret":Secret
+    }
+    r = requests.get(url=Url,params=Data,verify=False)
+    Token = r.json()['access_token']
+    return Token
+ 
+def SendMessage(Token,Subject,Content, ProName):
+    #Url = "https://qyapi.weixin.qq.com/cgi-bin/appchat/send?access_token=%s" % Token
+    Url = "https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token=%s" % Token
+    #Data = {
+    #    "chatid": "JenkinsAlarm",  # 此处不明白请参考企业微信官网
+    #    "msgtype": "text",
+    #    "text": {
+    #        "content": "[项目名称] : " + ProName + '\n' + "[项目地址] : " + Subject + '\n' + Content + '\n'
+    #    },
+    #    "safe": "0"
+    #}
+    data = {
+        "touser" : "LiZhenYa",
+        "msgtype" : "text",
+        "agentid" : 1000002,
+        "text" : {
+           "content" : "[项目名称] : " + ProName + '\n' + "[项目地址] : " + Subject + '\n' + 
+Content + '\n'
+        },
+        "safe":0
+    }
+    r = requests.post(url=Url,data=json.dumps(data),verify=False)
+    return r.text
+ 
+def action_from_file(filename):
+    try:
+        str1 = '[变更日志] : '
+        with open(filename, 'r') as f:
+            for i in f.readlines():
+                str1 += i
+		print str1
+        if len(str1) == 17:
+            str1 += " 无变更"
+	# print str1
+        return str1
+    except Exception as e:
+        #print('[ERROR] {0}'.format(e))
+	str1 += str(e)
+ 
+ 
+if __name__ == '__main__':
+    Corpid = "wwa95c9738129a5c8e"
+    Secret = "q7Q7IfUOKDWs0WXnN0IF6vESqBpxpV6opVyuSKUxexY"
+ 
+    Subject = sys.argv[1]
+    Content = action_from_file(sys.argv[2])
+    ProName = sys.argv[3]
+ 
+    Token = GetToken(Corpid, Secret)
+    Status = SendMessage(Token,Subject,Content,ProName)
+    print Status
+
+```
+
+阿里mvn
+
+```
+<mirror> 
+<id>nexus-aliyun</id> 
+<mirrorOf>*</mirrorOf> 
+<name>Nexus aliyun</name> 
+<url>http://maven.aliyun.com/nexus/content/groups/public</url> 
+</mirror>
+```
+
+流水线示范
+
+```
+示例1
+pipeline{
+    agent any
+    stages{
+        stage("get code"){
+           steps{
+               echo "get code from scm"
+           }
+        }
+        stage("package"){
+            steps{
+                echo "packge code"
+            }
+        }
+        stage("deploy"){
+            steps{
+                echo "deploy packge to node1"
+            }
+        }
+    }
+}
+
+
+pipeline{
+    agent any
+    stages{
+        stage("get code"){
+           steps{
+                echo "get code"
+           }
+        }
+        stage("unit test"){
+           steps{
+                sh '/usr/local/sonar-scanner/bin/sonar-scanner -Dsonar.projectKey=html  -Dsonar.projectName=${JOB_NAME} -Dsonar.sources=.'
+           }
+        }
+        stage("package"){
+            steps{
+                sh 'tar zcf /opt/web-${BUILD_ID}.tar.gz ./* --exclude=./git --exclude=jenkinsfile'
+            }
+        }
+        stage("deploy"){
+            steps{
+                sh 'ssh 10.0.0.7 "cd /usr/share/nginx && mkdir web-${BUILD_ID}"'
+                sh 'scp /opt/web-${BUILD_ID}.tar.gz 10.0.0.7:/usr/share/nginx/web-${BUILD_ID}'
+                sh 'ssh 10.0.0.7 "cd /usr/share/nginx/web-${BUILD_ID} && tar xf web-${BUILD_ID}.tar.gz && rm -rf web-${BUILD_ID}.tar.gz"'
+                sh 'ssh 10.0.0.7 "cd /usr/share/nginx && rm -rf html && ln -s web-${BUILD_ID} /usr/share/nginx/html"'
+            }
+        }
+    }
+}
+
+```
