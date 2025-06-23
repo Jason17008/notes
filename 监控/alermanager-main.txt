@@ -1,0 +1,31 @@
+global:
+  smtp_smarthost: 'fastsmtphz.qiye.163.com:25'
+  smtp_from: 'noreply@aiauto.com'
+  smtp_auth_username: 'noreply@aiauto.com'
+  smtp_auth_password: 'ai123'
+  smtp_require_tls: false
+route:
+  group_by: ['alertname']
+  group_wait: 5m
+  group_interval: 30s
+  repeat_interval: 5m
+  receiver: 'default-receiver'
+  routes:
+  - receiver: 'web.hook'
+
+receivers:
+- name: 'default-receiver'
+  email_configs:
+  - to: 'opsadmin@aiauto.com'
+
+- name: 'web.hook'
+  webhook_configs:
+  - url: 'http://qywx-alarm.monitoring.svc:5001/send'
+    send_resolved: true
+
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'dev', 'instance']
