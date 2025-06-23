@@ -1,0 +1,29 @@
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    #- /usr/local/tomcat/logs/localhost_access_log.*  #二进制安装
+    - /var/log/tomcat9/localhost_access_log.* 
+  json.keys_under_root: true  #默认False会将json数据存储至message，改为true则会独立message外存储
+  tags: ["tomcat-access"]
+
+- type: log
+  enabled: true
+  paths:
+    #- /usr/local/tomcat/logs/catalina.*
+    - /var/log/tomcat9/catalina.*  #包安装
+  tags: ["tomcat-error"]
+  
+output.elasticsearch:
+  hosts: ["10.0.0.201:9200","10.0.0.202:9200","10.0.0.203:9200"]        #指定ELK集群服务器地址和端口
+  indices:
+    - index: "tomcat-access-%{[agent.version]}-%{+yyyy.MM.dd}" 
+      when.contains:
+        tags: "tomcat-access"
+    - index: "tomcat-error-%{[agent.version]}-%{+yyyy.MM.dd}"
+      when.contains:
+        tags: "tomcat-error"
+  
+setup.ilm.enabled: false 
+setup.template.name: "tomcat" 
+setup.template.pattern: "tomcat-*"

@@ -1,0 +1,24 @@
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    - /var/log/nginx/access_json.log
+  json.keys_under_root: true #默认False会将json数据存储至message，改为true则会独立message外存储
+  json.overwrite_keys: true  #设为true,覆盖默认的message字段，使用自定义json格式中的key
+  tags: ["nginx-access"]
+  
+- type: log
+  enabled: true
+  paths:
+    - /var/log/nginx/error.log
+  tags: ["nginx-error"]
+
+#output.redis:
+#  hosts: ["10.0.0.210:6379"]
+#  key: "nginx"
+#  password: "123456"
+#  #db: 0
+
+output.logstash:
+  hosts: ["10.0.0.206:5044","10.0.0.207:5044"] 
+

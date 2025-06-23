@@ -1,0 +1,15 @@
+filebeat.inputs:
+- type: log
+  enabled: true                             #开启日志
+  paths:
+  - /var/log/nginx/access.log               #指定收集的日志文件
+output.elasticsearch:
+  hosts: ["10.0.0.201:9200"]        #指定ES集群服务器地址和端口
+  index: "nginx-access-%{[agent.version]}-%{+yyyy.MM.dd}" #自定义索引名称
+
+setup.ilm.enabled: false
+setup.template.name: "nginx" #定义模板名称,要自定义索引名称,必须指定此项,否则无法启动
+setup.template.pattern: "nginx-*" #定义模板的匹配索引名称,要自定义索引名称,必须指定此项,否则无法启动
+setup.template.settings:
+  index.number_of_shards: 3
+  index.number_of_replicas: 2

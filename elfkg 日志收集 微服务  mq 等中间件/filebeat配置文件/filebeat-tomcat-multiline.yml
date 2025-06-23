@@ -1,0 +1,35 @@
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+    #- /usr/local/tomcat/logs/localhost_access_log.*
+    - /var/log/tomcat9/localhost_access_log.*
+  json.keys_under_root: true 
+  json.overwrite_keys: false 
+  tags: ["tomcat-access"]
+
+- type: log
+  enabled: true
+  paths:
+    #- /usr/local/tomcat/logs/catalina.*.log
+    - /var/log/tomcat9/catalina.*.log
+  tags: ["tomcat-error"]
+  multiline.type: pattern            #此为默认值,可省略
+  multiline.pattern: '^[0-3][0-9]-'  #正则表达式匹配以两位,或者为'^\d{2}'
+  multiline.negate: true             #negate否定无效
+  multiline.match: after
+  multiline.max_lines: 5000          #默认只合并500行,指定最大合并5000行
+  
+output.elasticsearch:
+  hosts: ["10.0.0.201:9200"]      
+  indices:
+    - index: "tomcat-access-%{[agent.version]}-%{+yyy.MM.dd}" 
+      when.contains:
+        tags: "tomcat-access"
+    - index: "tomcat-error-%{[agent.version]}-%{+yyy.MM.dd}"
+      when.contains:
+        tags: "tomcat-error"
+  
+setup.ilm.enabled: false 
+setup.template.name: "tomcat" 
+setup.template.pattern: "tomcat-*"

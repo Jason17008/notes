@@ -1,0 +1,6 @@
+filebeat.inputs:
+- type: stdin
+  enabled: true
+output.console:
+  pretty: true
+  enable: true

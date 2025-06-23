@@ -1,0 +1,12 @@
+filebeat.inputs:
+- type: stdin
+  enabled: true
+  
+output.kafka:
+  hosts: ["10.0.0.211:9092", "10.0.0.212:9092", "10.0.0.213:9092"]
+  topic: filebeat-log 
+  partition.round_robin:
+    reachable_only: true
+  required_acks: 1 
+  compression: gzip  
+  max_message_bytes: 1000000 

@@ -1,0 +1,18 @@
+filebeat.inputs:
+- type: log
+  enabled: true 
+  paths:
+  - /var/log/test.log  
+  include_lines: ['sshd','failed', 'password']
+
+output.elasticsearch:
+  hosts: ["10.0.0.201:9200","10.0.0.202:9200","10.0.0.203:9200"]
+  index: "m53-%{[agent.version]}-%{+yyyy.MM.dd}"
+
+
+setup.ilm.enabled: false #关闭索引生命周期ilm功能，默认开启时索引名称只能为filebeat-*，自定义索引名必须修改为false
+setup.template.name: "m53" #定义模板名称,要自定义索引名称,必须指定此项,否则无法启动
+setup.template.pattern: "m53-*" #定义模板的匹配索引名称,要自定义索引名称,必须指定此项,否则无法启动
+setup.template.settings:
+  index.number_of_shards: 3
+  index.number_of_replicas: 1

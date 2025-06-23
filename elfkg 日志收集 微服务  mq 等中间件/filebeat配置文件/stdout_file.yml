@@ -1,0 +1,10 @@
+filebeat.inputs:
+- type: stdin
+  enabled: true
+  json.keys_under_root: true #默认False会将json数据存储至message，true则会将数据以独立字段存储,并且删除message字段，如果是文本还是放在message字段中
+#output.console:
+#  pretty: true
+#  enable: true
+output.file:
+  path: "/tmp"
+  filename: "filebeat.log"

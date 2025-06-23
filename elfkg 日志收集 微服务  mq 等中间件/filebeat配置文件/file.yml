@@ -1,0 +1,8 @@
+filebeat.inputs:
+- type: log
+  enabled: true
+  paths:
+  - /var/log/test.log
+output.console:
+  pretty: true
+  enable: true
