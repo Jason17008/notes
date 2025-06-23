@@ -1,1 +1,269 @@
+python
+
+```
+FROM python:3.7-slim-stretch
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN  sed -i 's/deb.debian.org/ftp.cn.debian.org/g' /etc/apt/sources.list \
+  && sed -i 's/security.debian.org/ftp.cn.debian.org/g' /etc/apt/sources.list \
+  && apt-get update -y \
+  && apt-get install -y wget gcc libsm6 libxext6 libglib2.0-0 libxrender1 git vim \
+  && apt-get clean && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple -r requirements.txt \
+    && rm requirements.txt
+
+COPY . .
+
+EXPOSE 5000
+HEALTHCHECK CMD curl --fail http://localhost:5000 || exit 1
+
+ENTRYPOINT ["gunicorn", "app:app", "-c", "gunicorn_config.py"]
+
+```
+
+golang
+
+```
+# stage 1: build src code to binary
+FROM golang:1.13-alpine3.10 as builder
+
+ENV GOPROXY https://goproxy.cn
+ENV GO111MODULE on
+
+COPY *.go /app/
+
+RUN cd /app && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o hellogo .
+
+# stage 2: use alpine as base image
+FROM alpine:3.10
+
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk update && \
+    apk --no-cache add tzdata ca-certificates && \
+    cp -f /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    # apk del tzdata && \
+    rm -rf /var/cache/apk/*
+
+
+COPY --from=builder /app/hellogo /hellogo
+
+CMD ["/hellogo"] 
+
+
+```
+
+nodejs
+
+```
+FROM node:12.6.0-alpine
+MAINTAINER boge <Wx:bogeit>
+
+WORKDIR /app
+COPY package.json .
+
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk update && \
+    yarn  config set registry https://registry.npm.taobao.org && \
+    yarn install
+
+RUN yarn build
+
+COPY . .
+
+EXPOSE 6868
+
+ENTRYPOINT ["yarn", "start"]
+
+
+```
+
+java
+
+```
+FROM maven:3.6.3-adoptopenjdk-8 as target
+
+ENV MAVEN_HOME /usr/share/maven
+ENV PATH $MAVEN_HOME/bin:$PATH
+COPY settings.xml /usr/share/maven/conf/
+WORKDIR /build
+COPY pom.xml .
+RUN mvn dependency:go-offline  # use docker cache
+COPY src/ /build/src/
+RUN mvn clean package -Dmaven.test.skip=true
+
+
+FROM java:8
+WORKDIR /app
+RUN  rm /etc/localtime && cp /usr/share/zoneinfo/Asia/Shanghai  /etc/localtime
+COPY --from=target /build/target/*.jar  /app/app.jar
+EXPOSE 8080
+ENTRYPOINT ["java","-Xmx768m","-Xms256m","-Djava.security.egd=file:/dev/./urandom","-jar","/app/app.jar"]
+
+
+```
+
+
+
+# 基于Dockerfile构建本地镜像
+
+
+```
+docker build --network host --build-arg PYPI_IP="xx.xx.xx.xx" --cache-from "仓库地址"/"仓库命名空间"/"镜像名称":latest --tag "仓库地址"/"仓库命名空间"/"镜像名称":"镜像版本号" --tag "仓库地址"/"仓库命名空间"/"镜像名称":latest
+```
+
+我们这里分别用python以及golang语言代码来打包镜像
+
+```
+# app.py
+from flask import Flask
+app = Flask(__name__)
+
+@app.route('/')
+def hello_world():
+    return 'Hello, World! 23.10.20.01'
+
+@app.route('/gg/<username>')
+def hello(username):
+    return 'welcome' + ': ' + username + '!'
+
+
+
+# gunicorn_config.py
+bind = '0.0.0.0:5000'
+graceful_timeout = 3600
+timeout = 1200
+max_requests = 1200
+workers = 1
+worker_class = 'gevent'
+
+
+
+# requirements.txt
+flask
+gevent
+gunicorn
+
+
+
+# Dockerfile
+FROM python:3.9.17-slim-bullseye
+MAINTAINER WX:bogeit
+
+WORKDIR /app
+
+COPY requirements.txt .
+
+RUN  sed -i 's/deb.debian.org/ftp.cn.debian.org/g' /etc/apt/sources.list \
+  && sed -i 's/security.debian.org/ftp.cn.debian.org/g' /etc/apt/sources.list \
+  && apt-get update -y \
+  && apt-get install -y wget gcc libsm6 libxext6 libglib2.0-0 libxrender1 make \
+  && apt-get clean && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple -r requirements.txt \
+    && rm requirements.txt
+# 指定多个pip安装源
+# pip install -r requirements.txt -i http://mirrors.aliyun.com/pypi/simple/ --extra-index-url https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host mirrors.aliyun.com --trusted-host pypi.tuna.tsinghua.edu.cn \
+COPY . .
+
+EXPOSE 5000
+HEALTHCHECK CMD curl --fail http://localhost:5000 || exit 1
+
+ENTRYPOINT ["gunicorn", "app:app", "-c", "gunicorn_config.py"]
+
+```
+
+golang
+
+```
+// hellogo.go
+package main
+
+import (
+	"fmt"
+	"log"
+	"math/rand"
+	"net/http"
+	"time"
+)
+
+var appVersion = "23.10.20.01" //Default/fallback version
+
+func NowTime(t time.Time) string {
+	nowtime := fmt.Sprintf("%4d-%02d-%02d %02d:%02d:%02d",
+		t.Year(), t.Month(), t.Day(),
+		t.Hour(), t.Minute(), t.Second())
+	return nowtime
+}
+
+func GetRandomString(l int) string {
+	str := "0123456789abcdefghijklmnopqrstuvwxyz"
+	bytes := []byte(str)
+	result := []byte{}
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i := 0; i < l; i++ {
+		result = append(result, bytes[r.Intn(len(bytes))])
+	}
+	return string(result)
+}
+
+
+
+func getFrontpage(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello, Go! I'm instance %s running version %s at %s\n", GetRandomString(6), appVersion, NowTime(time.Now()))
+}
+
+func health(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	if http.StatusOK == 200{
+	    fmt.Fprintf(w, "%s\n", "ok")
+	}
+}
+
+func getVersion(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "%s\n", appVersion)
+}
+
+func main() {
+	rand.Seed(time.Now().UTC().UnixNano())
+	http.HandleFunc("/", getFrontpage)
+	http.HandleFunc("/health", health)
+	http.HandleFunc("/version", getVersion)
+	log.Fatal(http.ListenAndServe(":3000", nil))
+}
+
+
+
+# stage 1: build src code to binary
+FROM golang:1.19.11-alpine3.18 as builder
+
+ENV GOPROXY https://goproxy.cn
+
+COPY *.go /app/
+
+RUN cd /app \
+    && go mod init github.com/bogeit/golangtest \
+    && go mod tidy \
+    && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w" -o hellogo .
+
+# stage 2: use alpine as base image
+FROM alpine:3.18
+
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories && \
+    apk update && \
+    apk --no-cache add tzdata ca-certificates && \
+    cp -f /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    # apk del tzdata && \
+    rm -rf /var/cache/apk/*
+
+
+COPY --from=builder /app/hellogo /hellogo
+
+CMD ["/hellogo"] 
+————————————————
+
+
+```
+
 
